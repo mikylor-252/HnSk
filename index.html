@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#090d16">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Hide & Seek: After Dark</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    :root { --ink:#f5f2df; --muted:#a9b1bd; --cyan:#5de4e9; --pink:#ff6b8a; --panel:rgba(11,17,29,.9); }
+    * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html, body { width:100%; height:100%; margin:0; overflow:hidden; background:#05070b; }
+    body { color:var(--ink); font-family:'Press Start 2P', monospace; display:grid; place-items:center; touch-action:none; }
+    #game-shell { position:relative; width:100vw; height:100vh; display:grid; place-items:center; background:#05070b; overflow:hidden; }
+    canvas { display:block; image-rendering:pixelated; image-rendering:crisp-edges; background:#0a1019; box-shadow:0 0 0 1px #29384b, 0 0 45px rgba(18,210,215,.12); }
+    #hud { position:absolute; inset:0; pointer-events:none; display:none; }
+    .hud-top { position:absolute; left:4.5%; right:4.5%; top:3.3%; display:flex; justify-content:space-between; align-items:center; font-size:9px; text-shadow:2px 2px #071019; }
+    .hud-chip { padding:8px 7px; background:rgba(9,15,25,.72); border:1px solid rgba(110,237,228,.35); box-shadow:3px 3px 0 rgba(0,0,0,.25); }
+    #timer { color:#ffe48b; }
+    #hint { position:absolute; left:50%; top:14%; transform:translateX(-50%); width:88%; text-align:center; color:#bdc9d5; font-size:7px; line-height:1.8; opacity:.9; }
+    #controls { position:absolute; inset:0; pointer-events:none; display:none; }
+    #dpad { position:absolute; left:5%; bottom:5.5%; width:126px; height:126px; pointer-events:auto; opacity:.82; }
+    .pad-button, #dash { border:1px solid rgba(150,244,239,.55); color:#b9fffa; background:rgba(20,42,55,.62); font-family:inherit; user-select:none; touch-action:none; }
+    .pad-button { position:absolute; width:42px; height:42px; font-size:15px; display:grid; place-items:center; border-radius:7px; box-shadow:inset 0 0 0 2px rgba(11,20,28,.35), 3px 3px 0 rgba(0,0,0,.22); }
+    .pad-button:active, #dash:active, .pressed { background:rgba(64,180,182,.74); color:#fff; }
+    #up { left:42px; top:0; } #left { left:0; top:42px; } #right { right:0; top:42px; } #down { left:42px; bottom:0; }
+    #dash { pointer-events:auto; position:absolute; right:7%; bottom:8.5%; width:78px; height:78px; border-radius:50%; font-size:9px; line-height:1.5; box-shadow:0 0 0 5px rgba(93,228,233,.09), 4px 4px 0 rgba(0,0,0,.25); }
+    #dash.ready { border-color:#ffe48b; color:#ffe48b; }
+    #message { position:absolute; bottom:4%; left:50%; transform:translateX(-50%); color:#8292a5; font-size:6px; white-space:nowrap; }
+    .screen { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:8%; text-align:center; background:radial-gradient(circle at 50% 42%, rgba(25,62,77,.28), transparent 48%), rgba(5,8,14,.82); }
+    .screen.hidden { display:none; }
+    .kicker { color:var(--cyan); font-size:8px; letter-spacing:1px; margin-bottom:24px; }
+    h1 { margin:0; color:#fff4ca; font-size:clamp(22px,8vw,38px); line-height:1.45; text-shadow:4px 4px #d53e63, 7px 7px #182435; }
+    .subtitle { color:#b8c3ce; font-size:8px; line-height:2.1; max-width:350px; margin:21px 0 28px; }
+    .button { border:2px solid #ffe48b; color:#ffe48b; background:#182537; font-family:inherit; font-size:10px; padding:16px 18px; box-shadow:5px 5px 0 #070b12; cursor:pointer; min-width:190px; }
+    .button:active { transform:translate(3px,3px); box-shadow:2px 2px 0 #070b12; }
+    .small { color:#7e8a98; font-size:6px; line-height:2; margin-top:20px; }
+    #countdown { background:rgba(4,8,14,.35); }
+    #count-value { font-size:clamp(66px,24vw,116px); color:#fff4ca; text-shadow:7px 7px #d53e63; }
+    #count-label { margin-top:24px; font-size:8px; color:#9be9e4; }
+    .result-title { font-size:24px; line-height:1.5; color:#fff4ca; text-shadow:4px 4px #d53e63; }
+    .result-copy { font-size:8px; line-height:2; color:#bac5d2; margin:17px 0 25px; }
+    @media (orientation:landscape) and (max-height:520px) { .screen { padding:4%; } .hud-top { top:4%; } #dpad { bottom:4%; } #dash { bottom:7%; } }
+  </style>
+</head>
+<body>
+  <main id="game-shell" aria-label="Hide and Seek After Dark game">
+    <canvas id="game" width="360" height="640"></canvas>
+    <section id="hud" aria-live="polite">
+      <div class="hud-top"><span class="hud-chip" id="level-label">SECTOR 01</span><span class="hud-chip" id="timer">00:25</span></div>
+      <div id="hint">STAY OUT OF THE RED CONE</div>
+      <div id="message">ARROWS / WASD TO MOVE</div>
+    </section>
+    <section id="controls" aria-label="Touch controls">
+      <div id="dpad"><button class="pad-button" id="up" aria-label="Move up">▲</button><button class="pad-button" id="left" aria-label="Move left">◀</button><button class="pad-button" id="right" aria-label="Move right">▶</button><button class="pad-button" id="down" aria-label="Move down">▼</button></div>
+      <button id="dash" aria-label="Dash or sneak">DASH</button>
+    </section>
+    <section class="screen" id="menu">
+      <div class="kicker">NIGHT SHIFT // 1987</div><h1>HIDE<br>&amp; SEEK</h1>
+      <p class="subtitle">The lights are out. The seeker is looking.<br>Reach the safe signal before time runs dry.</p>
+      <button class="button" id="start-button">START GAME</button>
+      <div class="small">MOVE: WASD / ARROWS<br>DASH: SPACE / BUTTON</div>
+    </section>
+    <section class="screen hidden" id="countdown"><div id="count-value">5</div><div id="count-label">THE SEEKER ISN'T LOOKING</div></section>
+    <section class="screen hidden" id="victory"><div class="kicker">SIGNAL FOUND</div><div class="result-title" id="victory-title">NICE HIDE.</div><div class="result-copy" id="victory-copy">You stayed in the shadows.</div><button class="button" id="next-button">NEXT SECTOR</button></section>
+    <section class="screen hidden" id="gameover"><div class="kicker" style="color:#ff6b8a">SPOTTED</div><div class="result-title">CAUGHT.</div><div class="result-copy">The seeker saw your silhouette.<br>Every shadow is a second chance.</div><button class="button" id="retry-button">TRY AGAIN</button></section>
+  </main>
+<script>
+'use strict';
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+const W = 360, H = 640, TAU = Math.PI * 2;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const angleDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+const isTouch = matchMedia('(pointer: coarse)').matches;
+
+class AudioEngine {
+  constructor() { this.context = null; this.master = null; }
+  init() { if (this.context) { if (this.context.state === 'suspended') this.context.resume(); return; } this.context = new (window.AudioContext || window.webkitAudioContext)(); this.master = this.context.createGain(); this.master.gain.value = .16; this.master.connect(this.context.destination); }
+  tone(frequency, duration, type = 'square', volume = .22, delay = 0) { if (!this.context) return; const now = this.context.currentTime + delay; const osc = this.context.createOscillator(); const gain = this.context.createGain(); osc.type = type; osc.frequency.setValueAtTime(frequency, now); gain.gain.setValueAtTime(volume, now); gain.gain.exponentialRampToValueAtTime(.001, now + duration); osc.connect(gain); gain.connect(this.master); osc.start(now); osc.stop(now + duration); }
+  countdown(n) { this.tone(n === 1 ? 740 : 440, .11, 'square', .2); }
+  dash() { this.tone(180, .08, 'sawtooth', .18); this.tone(360, .1, 'square', .13, .05); }
+  caught() { this.tone(190, .18, 'sawtooth', .25); this.tone(100, .35, 'sawtooth', .22, .16); }
+  win() { [523,659,784,1046].forEach((f, i) => this.tone(f, .16, 'square', .2, i * .09)); }
+}
+class ParticleSystem {
+  constructor() { this.items = []; }
+  burst(x, y, color, count = 12, speed = 38) { for (let i = 0; i < count; i++) { const a = Math.random() * TAU, s = Math.random() * speed + 12; this.items.push({x, y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, life:.35 + Math.random()*.45, max:.7, color, size:2 + Math.random()*3}); } }
+  update(dt) { this.items.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .94; p.vy *= .94; p.life -= dt; }); this.items = this.items.filter(p => p.life > 0); }
+  draw() { this.items.forEach(p => { ctx.globalAlpha = clamp(p.life / p.max, 0, 1); ctx.fillStyle = p.color; ctx.fillRect(p.x|0, p.y|0, p.size|0, p.size|0); }); ctx.globalAlpha = 1; }
+}
+class Obstacle {
+  constructor(x, y, w, h, type = 'crate') { this.x=x; this.y=y; this.w=w; this.h=h; this.type=type; }
+  contains(x, y, padding = 0) { return x > this.x - padding && x < this.x + this.w + padding && y > this.y - padding && y < this.y + this.h + padding; }
+  draw() {
+    const palette = this.type === 'bush' ? ['#183c38','#236052','#5cba77'] : this.type === 'wall' ? ['#293746','#3b5365','#8ba0a0'] : ['#593d32','#805544','#d3915b'];
+    ctx.fillStyle = palette[0]; ctx.fillRect(this.x, this.y, this.w, this.h);
+    ctx.fillStyle = palette[1]; ctx.fillRect(this.x+3, this.y+3, this.w-6, 4);
+    ctx.fillStyle = palette[2];
+    if (this.type === 'bush') { for (let x=this.x+4; x<this.x+this.w-2; x+=9) ctx.fillRect(x, this.y+8 + ((x|0)%3), 6, this.h-11); }
+    else if (this.type === 'crate') { ctx.fillRect(this.x+5, this.y+this.h/2-2, this.w-10, 3); ctx.fillRect(this.x+this.w/2-2, this.y+5, 3, this.h-10); }
+    else { ctx.fillRect(this.x+4, this.y+this.h-7, this.w-8, 3); }
+    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.strokeRect(this.x+.5, this.y+.5, this.w-1, this.h-1);
+  }
+}
+class Player {
+  constructor(game) { this.game=game; this.x=48; this.y=H-68; this.radius=8; this.speed=77; this.dash=0; this.dashCooldown=0; this.step=0; this.hidden=0; }
+  reset() { this.x=48; this.y=H-68; this.dash=0; this.dashCooldown=0; this.step=0; this.hidden=0; }
+  update(dt, input) {
+    let dx = (input.right ? 1 : 0) - (input.left ? 1 : 0), dy = (input.down ? 1 : 0) - (input.up ? 1 : 0);
+    const moving = dx || dy; if (moving) { const len=Math.hypot(dx,dy); dx/=len; dy/=len; }
+    if (input.dash && this.dashCooldown <= 0 && moving) { this.dash=.22; this.dashCooldown=1.1; this.game.audio.dash(); this.game.particles.burst(this.x, this.y, '#5de4e9', 7, 18); }
+    this.dashCooldown = Math.max(0, this.dashCooldown-dt); this.dash = Math.max(0, this.dash-dt);
+    const speed = this.speed * (this.dash > 0 ? 2.15 : 1);
+    this.move(dx*speed*dt, dy*speed*dt);
+    this.step += moving ? dt * (this.dash > 0 ? 18 : 9) : -dt*8; this.step = Math.max(0, this.step);
+    const cover = this.game.obstacles.some(o => o.type !== 'wall' && o.contains(this.x, this.y, 3)); this.hidden = cover ? Math.min(1, this.hidden+dt*4) : Math.max(0, this.hidden-dt*3);
+  }
+  move(mx, my) { const obstacles=this.game.obstacles; const nx=clamp(this.x+mx, 20, W-20), ny=clamp(this.y+my, 52, H-24); if (!obstacles.some(o=>o.contains(nx,this.y,this.radius))) this.x=nx; if (!obstacles.some(o=>o.contains(this.x,ny,this.radius))) this.y=ny; }
+  draw() { const bob = Math.sin(this.step)*1.5; ctx.save(); ctx.translate(this.x, this.y+bob); ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fillRect(-10,8,20,4); ctx.fillStyle='#f4c978'; ctx.fillRect(-6,-11,12,11); ctx.fillStyle='#253b51'; ctx.fillRect(-7,-9,14,5); ctx.fillStyle='#5de4e9'; ctx.fillRect(-8,0,16,12); ctx.fillStyle='#f5f2df'; ctx.fillRect(-10,11,7,4); ctx.fillRect(3,11,7,4); ctx.fillStyle='#ff8b72'; ctx.fillRect(-9,-5,3,2); ctx.fillRect(6,-5,3,2); if (this.hidden > 0) { ctx.strokeStyle=`rgba(93,228,233,${.25 + this.hidden*.35})`; ctx.strokeRect(-13,-15,26,33); } ctx.restore(); }
+}
+class Seeker {
+  constructor(game) { this.game=game; this.x=W-65; this.y=80; this.radius=10; this.angle=Math.PI/2; this.speed=31; this.pathIndex=0; this.alert=0; this.waypoints=[]; }
+  reset(level) { this.x=W-65; this.y=80; this.angle=Math.PI/2; this.speed=27+level*5; this.pathIndex=0; this.alert=0; this.waypoints=level === 1 ? [{x:294,y:100},{x:290,y:280},{x:230,y:280},{x:230,y:100}] : level === 2 ? [{x:295,y:100},{x:295,y:300},{x:178,y:300},{x:178,y:130}] : [{x:300,y:100},{x:300,y:260},{x:220,y:330},{x:80,y:290},{x:80,y:120}]; }
+  update(dt) { const target=this.waypoints[this.pathIndex]; const dx=target.x-this.x, dy=target.y-this.y, d=Math.hypot(dx,dy); if (d<5) this.pathIndex=(this.pathIndex+1)%this.waypoints.length; else { this.x += dx/d*this.speed*dt; this.y += dy/d*this.speed*dt; this.angle=Math.atan2(dy,dx); } const player=this.game.player; const dPlayer=distance(this,player); const facing=angleDiff(Math.atan2(player.y-this.y,player.x-this.x),this.angle); const visible=dPlayer<113 && Math.abs(facing)<.62 && !this.game.lineBlocked(this,player); if (visible && player.hidden < .7) this.alert=clamp(this.alert+dt*2.7,0,1); else this.alert=clamp(this.alert-dt*1.8,0,1); if (this.alert>=1) this.game.lose(); }
+  draw() { const a=this.angle, spread=.62, range=122; ctx.save(); ctx.globalAlpha=.17; ctx.fillStyle='#ff456e'; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.arc(this.x,this.y,range,a-spread,a+spread); ctx.closePath(); ctx.fill(); ctx.globalAlpha=.35; ctx.strokeStyle='#ff6b8a'; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.lineTo(this.x+Math.cos(a-spread)*range,this.y+Math.sin(a-spread)*range); ctx.lineTo(this.x+Math.cos(a+spread)*range,this.y+Math.sin(a+spread)*range); ctx.stroke(); ctx.restore(); ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(a); ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fillRect(-12,11,24,4); ctx.fillStyle='#efb879'; ctx.fillRect(-7,-12,14,12); ctx.fillStyle='#2b3245'; ctx.fillRect(-8,-11,16,5); ctx.fillStyle='#d84f61'; ctx.fillRect(4,-4,4,3); ctx.fillStyle='#be5260'; ctx.fillRect(-10,0,20,16); ctx.fillStyle='#f5f2df'; ctx.fillRect(5,3,7,3); ctx.restore(); }
+}
+class Game {
+  constructor() { this.state='menu'; this.level=1; this.levelTime=25; this.timeLeft=25; this.count=5; this.last=0; this.audio=new AudioEngine(); this.particles=new ParticleSystem(); this.player=new Player(this); this.seeker=new Seeker(this); this.obstacles=[]; this.input={up:false,down:false,left:false,right:false,dash:false}; this.shake=0; this.buildLevel(); this.bind(); this.resize(); requestAnimationFrame(t=>this.loop(t)); }
+  bind() { document.getElementById('start-button').onclick=()=>this.start(); document.getElementById('next-button').onclick=()=>{this.level=Math.min(3,this.level+1);this.start();}; document.getElementById('retry-button').onclick=()=>this.start(); const keys={ArrowUp:'up',w:'up',ArrowDown:'down',s:'down',ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right', ' ':'dash'}; addEventListener('keydown',e=>{const k=keys[e.key];if(k){e.preventDefault();this.input[k]=true;}}); addEventListener('keyup',e=>{const k=keys[e.key];if(k)this.input[k]=false;}); ['up','down','left','right'].forEach(id=>{const el=document.getElementById(id); const on=e=>{e.preventDefault();this.input[id]=e.type!=='pointerup'&&e.type!=='pointercancel';el.classList.toggle('pressed',this.input[id]);}; el.addEventListener('pointerdown',on); el.addEventListener('pointerup',on); el.addEventListener('pointercancel',on); el.addEventListener('pointerleave',on);}); const dash=document.getElementById('dash'); const setDash=e=>{e.preventDefault(); if(e.type==='pointerdown')this.input.dash=true;}; dash.addEventListener('pointerdown',setDash); dash.addEventListener('pointerup',()=>this.input.dash=false); dash.addEventListener('pointercancel',()=>this.input.dash=false); addEventListener('resize',()=>this.resize()); }
+  resize() { const scale=Math.min(innerWidth/W,innerHeight/H); canvas.style.width=`${W*scale}px`; canvas.style.height=`${H*scale}px`; }
+  buildLevel() { const common=[new Obstacle(75,145,58,24,'bush'),new Obstacle(224,180,60,25,'crate'),new Obstacle(112,285,72,25,'wall'),new Obstacle(245,385,58,25,'bush'),new Obstacle(64,440,58,25,'crate')]; const extras=[new Obstacle(205,100,28,62,'wall'),new Obstacle(44,245,27,72,'wall'),new Obstacle(158,405,34,63,'wall'),new Obstacle(272,495,38,27,'crate')]; this.obstacles=common.concat(this.level>1?extras.slice(0,this.level===2?2:4):[]); }
+  start() { this.audio.init(); this.buildLevel(); this.player.reset(); this.seeker.reset(this.level); this.timeLeft=this.levelTime+this.level*4; this.count=5; this.setScreen('countdown'); this.state='countdown'; this.updateHUD(); }
+  beginPlay() { this.state='playing'; this.setScreen(null); this.audio.tone(880,.12,'square',.18); }
+  lose() { if(this.state!=='playing')return; this.state='gameover'; this.audio.caught(); this.shake=.35; this.particles.burst(this.player.x,this.player.y,'#ff6b8a',22,62); this.setScreen('gameover'); }
+  win() { if(this.state!=='playing')return; this.state='victory'; this.audio.win(); this.particles.burst(this.player.x,this.player.y,'#ffe48b',28,70); document.getElementById('victory-title').textContent=this.level>=3?'MASTER OF SHADOWS':'NICE HIDE.'; document.getElementById('victory-copy').textContent=this.level>=3?'All sectors cleared. The night belongs to you.':`Sector ${String(this.level).padStart(2,'0')} cleared. Keep moving.`; document.getElementById('next-button').textContent=this.level>=3?'PLAY AGAIN':'NEXT SECTOR'; if(this.level>=3)this.level=0; this.setScreen('victory'); }
+  setScreen(screen) { ['menu','countdown','victory','gameover'].forEach(id=>document.getElementById(id).classList.toggle('hidden',id!==screen)); document.getElementById('hud').style.display=screen? 'none':'block'; document.getElementById('controls').style.display=screen? 'none':'block'; }
+  updateHUD() { document.getElementById('level-label').textContent=`SECTOR ${String(this.level).padStart(2,'0')}`; const s=Math.ceil(this.timeLeft); document.getElementById('timer').textContent=`00:${String(s).padStart(2,'0')}`; document.getElementById('hint').textContent=this.player.hidden>.7?'HIDDEN // HOLD POSITION':'STAY OUT OF THE RED CONE'; document.getElementById('dash').classList.toggle('ready',this.player.dashCooldown<=0); }
+  lineBlocked(a,b) { const steps=Math.ceil(distance(a,b)/4); for(let i=1;i<steps;i++){const t=i/steps,x=a.x+(b.x-a.x)*t,y=a.y+(b.y-a.y)*t;if(this.obstacles.some(o=>o.type==='wall'&&o.contains(x,y,1)))return true;} return false; }
+  drawWorld() { ctx.fillStyle='#0d1721';ctx.fillRect(0,0,W,H); ctx.fillStyle='#111f2c'; for(let y=52;y<H;y+=16)for(let x=0;x<W;x+=16)ctx.fillRect(x+((y/16)%2?3:0),y,1,1); ctx.fillStyle='#152b34';ctx.fillRect(18,53,W-36,2);ctx.fillRect(18,H-20,W-36,2); this.obstacles.forEach(o=>o.draw()); }
+  drawLighting() { const grad=ctx.createRadialGradient(this.player.x,this.player.y,17,this.player.x,this.player.y,152);grad.addColorStop(0,'rgba(255,236,177,.16)');grad.addColorStop(.35,'rgba(116,215,205,.07)');grad.addColorStop(1,'rgba(2,5,10,.88)');ctx.fillStyle=grad;ctx.fillRect(0,0,W,H); ctx.save();ctx.globalAlpha=.12+Math.sin(performance.now()/180)*.025;ctx.strokeStyle='#ffe48b';ctx.beginPath();ctx.arc(this.player.x,this.player.y,21+Math.sin(performance.now()/100)*2,0,TAU);ctx.stroke();ctx.restore(); }
+  draw() { ctx.save(); if(this.shake>0){ctx.translate((Math.random()-.5)*3,(Math.random()-.5)*3);} this.drawWorld(); this.seeker.draw(); this.player.draw(); this.particles.draw(); if(this.state==='playing')this.drawLighting(); ctx.restore(); }
+  update(dt) { this.particles.update(dt); this.shake=Math.max(0,this.shake-dt); if(this.state==='countdown'){this.count-=dt;if(this.count<=0)this.beginPlay();else if(Math.ceil(this.count)!==Math.ceil(this.count+dt)){this.audio.countdown(Math.ceil(this.count));}document.getElementById('count-value').textContent=Math.max(1,Math.ceil(this.count));} else if(this.state==='playing'){this.timeLeft-=dt;this.player.update(dt,this.input);this.seeker.update(dt);if(this.timeLeft<=0)this.win();this.updateHUD();} }
+  loop(now) { const dt=Math.min(.034,(now-this.last)/1000||0);this.last=now;this.update(dt);this.draw();requestAnimationFrame(t=>this.loop(t)); }
+}
+new Game();
+</script>
+</body>
+</html>
